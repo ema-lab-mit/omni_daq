@@ -1,3 +1,13 @@
+import os
+import sys
+# Setup paths
+this_path = os.path.abspath(__file__)
+father_path = os.path.abspath(os.path.join(this_path, "../../"))
+print(father_path)
+sys.path.append(father_path)
+
+################################
+# Local imports
 from timetagger4 import TimeTagger as tg
 # import timetagger4
 import time
@@ -75,7 +85,7 @@ class Tagger():
         self.card = tg(**kwargs)
 
     def start_reading(self):
-        self.init_card()
+        #self.init_card()
 
         self.started = True
         self.card.startReading()
@@ -110,27 +120,25 @@ class Tagger():
             self.card = None
 
 
+if __name__ == '__main__':
+    tagger = Tagger()
+    for i in range(1,4):
+        tagger.enable_channel(i)
+        tagger.set_channel_level(i,-2.25)
+        tagger.set_channel_falling(i)
+        tagger.set_channel_window(i,stop = 2*1000*1000)
+    tagger.set_trigger_level(-0.5)
+    tagger.set_trigger_falling()
+    tagger.set_trigger_level(0.5)
+    tagger.set_trigger_rising()
 
-print("W")
-tagger = Tagger()
+    print("Start reading")
+    tagger.start_reading()
+    while True:
+        print("Get data")
+        data = tagger.get_data()
+        if not data is None:
+            for d in data:
+                print(d)
 
-print("B")
-for i in range(1,4):
-    tagger.enable_channel(i)
-    tagger.set_channel_level(i,-2.25)
-    tagger.set_channel_falling(i)
-    tagger.set_channel_window(i,stop = 2*1000*1000)
-tagger.set_trigger_level(-0.5)
-tagger.set_trigger_falling()
-tagger.set_trigger_level(0.5)
-tagger.set_trigger_rising()
-
-
-tagger.start_reading()
-while True:
-   data = tagger.get_data()
-   if not data is None:
-	   for d in data:
-	       print(d)
-
-   time.sleep(0.01)
+        time.sleep(0.01)

@@ -1,4 +1,13 @@
-isolde_tagger_drivers = True
+import os
+import sys
+# Setup paths
+this_path = os.path.abspath(__file__)
+father_path = os.path.abspath(os.path.join(this_path, "../../"))
+print(father_path)
+sys.path.append(father_path)
+
+################################
+# Local imports
 from timetagger4 import TimeTagger as tg
 
 import time

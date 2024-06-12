@@ -1,0 +1,78 @@
+Last updated: 12 August 2021
+
+To install the timetagger card on a new computer and operate it successfully, you firstly need to properly install
+the hardware, which requires the official drivers, and secondly to properly compile the wrapped API, originally 
+written in C++ by cronologic and wrapped into python functions by the CRIS team at ISOLDE.
+
+-1. Install python 3 and the necessary modules on the computer. Python 3.6.8 has worked nicely in the past, just
+install whichever version you like. You also need pybind11, which you can add by typing 'pip install pybind11' on 
+your command prompt.
+
+0. Get the driver software from the cronologic website and install it.
+
+1. Open \collinear_daq_driver_wrap\collinear_daq_driver_wrap.cpp with visual studio (2015 or higher I believe).
+	-- You can install the Visual Studio 2017 Community Edition from the CERN CMF
+	-- It is best to open visual studio and then go File>Open>Project/Solution and choose the .vcxproj file from 
+	the folder mentioned above.
+
+2. In Project > collinear_daq_driver_wrap properties:
+	Go to the general tab and make sure that
+		- The target name is timetagger4
+		- The target extension is .pyd
+		- Configuration type is Dynamic library (.dll)
+	Go to the VC++ directories and make sure
+		- that the include directories contains the path to your Anaconda3\include and the path to your 
+        pybind11\include .
+        	-- If you are not using Anaconda for your python distribution, and you rather use python directly,
+        	you should include the \include folder of your distribution directly. For instance, on new pccris
+        	computers, you can find the files of your python installation at: C:\Users\cris\AppData\Local\Programs\Python\PythonXX
+        	where 'XX' refers to the version of your installation (remember that AppData is often a hidden folder so you might 
+        	have to type the full address in windows explorer to find the folder). Alternatively, you can open a command prompt,
+        	type 'python' to open an interactive python shell, then type 'import os', 'import sys', and then enter the command 
+        	'os.path.dirname(sys.executable)'. This will give you the path to your python installation.
+        	-- For the pybind11 \include folder, go to the location of your python installation, then go to Lib>site-packages>pybind11
+        	and the folder is there.
+		- that the library directories point to the location of the drivers obtained from cronologic for 
+        the TimeTagger4 device (...\driver\x64), and also to your Anaconda3\libs .
+        	-- As with the include directories, if you are not using Anaconda, add the \libs folder of your python installation directly
+        	-- Make sure that the cronologic drivers you are using (in \driver\x64) are for the correct version of windows you have.
+        	You can make sure that's the case by installing the correct version of the drivers from the cronologic website.
+
+3. Build the solution using the green arrow (local windows debugger). If there are any complaints about dll 
+   missing or whatever, you can find them either in the install folder or in the driver folder in the install 
+   directory of the cronologic driver (e.g. C:\Program Files\cronologic\TimeTagger4). Just copy paste them 
+   into the directory \collinear_driver_wrap with the other .dll and .h files that are already there.
+   		-- On some computers, visual studio will complain that it cannot convert a volatile variable (crono_packet) to a non-volatile
+   		one. You can resolve this by going to the c++ header files (.h extension) that the .cpp wrapper file includes at the top (#include statements)
+   		and use ctrl+F to find all occurences of the keyword volatile, and delete it. The volatile keyword instructs the compiler not to try any 
+   		juicy optimization adaptations on that variable, because it will change through external input. If a variable looks to the compiler like it
+   		never changes (e.g. because it can only change due to external input), some compilers will automatically convert it to an immutable object 
+   		in order to save resources. Adding the volatile keyword instructs the compiler to not try this optimization. It seems like removing the volatile
+   		keyword does no harm when using Visual Studio 2017 Community.
+
+4. You will find the driver files you need in x64\Debug. There should be a .pyd file. 
+   If not, you're looking in the wrong x64\Debug folder (VS likes to throw them around everywhere in the 
+   subdirectories).
+
+5. Copy those files to where you want to run your python code, and make sure to also copy the dll in the 
+   C:\Program Files\cronologic\TimeTagger4\driver folder, just to be sure. 
+
+   This is the full list of required dll:
+	timetagger4.exp
+	timetagger4.ilk
+	timetagger4.lib
+	timetagger4.pdb
+	timetagger4.pyd
+	clr_crono_base.dll
+	clr_xtdc4_driver_64.dll
+	xtdc4_driver_64.dll
+	xtdc4_driver_64.lib
+
+6. When running python code, if you do get errors about missing dll, you can find them either in the install folder in 
+   C:\Program Files\cronologic\TimeTagger4, or in the driver folder in that same directory. Just copy paste them into 
+   your working directory.
+
+7. As an example script, you can run the script 'test.py' in the folder C:\Users\cris\cernbox\Documents\Networked-Data-Acquisition\backend\acquire_files\TimeTaggerDriver
+	You need to have the timetagger card connected to your computer, as well as a trigger signal (from a quantum composer, for instance) and to make full use of the test 
+	script, also have counts coming into one of the channels. Make sure in lines 117-120 that hte correct edge type is chosen for the trigger, as well as the correct sign
+	on the trigger level (check with an oscilloscope on your trigger).

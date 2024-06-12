@@ -8,12 +8,14 @@ import os
 import threading as th
 import epics
 import sys
-# Pathe to file
+# Setup paths
 this_path = os.path.abspath(__file__)
 father_path = os.path.abspath(os.path.join(this_path, "../../"))
 print(father_path)
 sys.path.append(father_path)
 
+################################
+# Local imports
 from modules.generator import RFGenerator
 
 class RF(QtWidgets.QMainWindow):
