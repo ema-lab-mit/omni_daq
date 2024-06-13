@@ -6,8 +6,7 @@ this_path = os.path.abspath(__file__)
 father_path = os.path.abspath(os.path.join(this_path, "../../"))
 print(father_path)
 sys.path.append(father_path)
-# if we have to hardcode sth, it might as well be at the top of the file
-# these are the channels ON the tagger that each magnetof is connected to
+
 SAVE_FILE_FOLDER = r'C:\\Users\\EMALAB\Desktop\\TW_DAQ\\DATA\\scans\\'
 
 import sys
@@ -147,7 +146,7 @@ class Acquisition(QtWidgets.QMainWindow):
             self.tagger.set_channel_level(i,-0.85 )
             self.tagger.set_channel_falling(i)
             self.tagger.set_channel_window(i,start = int(self.tdc_start.value()*2000),stop = self.tdc_stop.value()*2000) # 1000*2000 is 1 ms after trig
-            
+
         self.tagger.set_trigger_level(0.1)
         self.tagger.set_trigger_rising()
         self.tagger.start_reading()
@@ -179,15 +178,15 @@ class Acquisition(QtWidgets.QMainWindow):
     def read_wavenumber(self):
         self.wavenumber = caget('LaserLab:wavenumber_3')
         print(self.wavenumber)
-    
+
 
     def read_tagger(self):
-        while self.running:   
+        while self.running:
             data = self.tagger.get_data()
             if data is not None:
                 if not data == 0:
                     # data is a list of lists, where each sublist (dataline) is of the form ['bunch_no', 'events_per_bunch', 'channel', 'delta_t']
-                    # it must be remembered that bunch_no is basically a useless number, it is just a counter of how many times the computer has 
+                    # it must be remembered that bunch_no is basically a useless number, it is just a counter of how many times the computer has
                     # requested data from tha tagger. Not really useful, but styaing there for legacy.
                     # That is actually not true, it is the trigger number, counted by the DAQ card. So it is truly the bunch number. - Ruben
                     #data = np.row_stack(data)
@@ -213,7 +212,7 @@ class Acquisition(QtWidgets.QMainWindow):
             self.clear_data()
 
         self.tofPlot.curve.setData(self.tdc_bins,self.hist, pen='r', stepMode=True)
-        
+
         if self.data is not None and len(self.data)>1:
             try:
                 # not this # self.freqPlot.plot(self.freqs,self.rates, clear=True, pen='r')
@@ -226,7 +225,7 @@ class Acquisition(QtWidgets.QMainWindow):
         # TIME-EVOLUTION PLOT
         self.timePlot.plot(range(len(self.rates)), self.rates, clear=True, pen='b',symbol='o', stepMode=False)
 
-        
+
     def scan_rf_loop(self):
         if self.scanning_rf:
             if time.time() - self.last_time > self.dt:
@@ -284,7 +283,7 @@ class Acquisition(QtWidgets.QMainWindow):
             # if not self.is_magnetof_2_biased:
             #     data = data[data[:,-2] != MAGNETOF_2_CHANNEL ]
 
-            # THIS *SEEM* TO WORK FINE. The tof plot works fine. you have predefined tdc bins and it sorts each line 
+            # THIS *SEEM* TO WORK FINE. The tof plot works fine. you have predefined tdc bins and it sorts each line
             # according to its delta_t. Lines with 0 counts have delta_t == -1 which is not in the tdc bins
             # so it doesn't get sorted. So 0 counts get added nowhere
             # y,x = np.histogram(data[:,5]/2000, self.tdc_bins)
@@ -340,7 +339,7 @@ class Acquisition(QtWidgets.QMainWindow):
                             pass
                     else:
                         try:
-                            # here it would be better to just use the known bins 
+                            # here it would be better to just use the known bins
                             new_y, new_spectrum_bin_edges = np.histogram(new_data[:,1], self.spectrum_bins, weights=(data[:, -1]>-1).astype(int)/len(data) )
                             self.spectrum_y_vals += new_y
                             # new_spectrum_bin_edges = new_spectrum_bin_edges[:-1] + np.diff(new_spectrum_bin_edges)/2
@@ -366,12 +365,12 @@ class Acquisition(QtWidgets.QMainWindow):
             self.max_wvn_recorded = self.wavenumber
             update_bins = True
 
-        # 
+        #
         if update_bins: # Time to recalculate the spectrum bins
             if self.min_wvn_recorded == self.initial_min_wvn_recorded or self.max_wvn_recorded == self.initial_max_wvn_recorded:
                 self.spectrum_bins = np.linspace(self.min_wvn_recorded, self.max_wvn_recorded, int( abs(self.max_wvn_recorded - self.min_wvn_recorded) / 3 ))
                 self.spectrum_rebin = True
-            else: 
+            else:
                 self.spectrum_bins = np.linspace(self.min_wvn_recorded, self.max_wvn_recorded, int( abs(self.max_wvn_recorded - self.min_wvn_recorded)/self.bin_size_cm ))
                 self.spectrum_rebin = True
             return
@@ -435,7 +434,7 @@ class Acquisition(QtWidgets.QMainWindow):
 
         self.list_data = []
         self.data = None
-         
+
         self.tdc_bins = np.linspace(self.tdc_start.value(),self.tdc_stop.value(),int((self.tdc_stop.value()-self.tdc_start.value())/self.tdc_bin.value()))
         self.hist = np.zeros(len(self.tdc_bins)-1)
 
