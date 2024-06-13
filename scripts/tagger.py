@@ -26,8 +26,10 @@ class Tagger():
         
         self.card = None
         self.started = False
-
+        
+        self.initted = False
         self.init_card()
+        self.initted = True
         
     def set_trigger_level(self,level):
         self.trigger_level = level
@@ -79,12 +81,13 @@ class Tagger():
             print("Card is not none")
             self.stop()
 
-        print(kwargs)
+        print("Communicating with card...")
         self.card = tg(**kwargs)
 
                 
     def start_reading(self):
-        self.init_card()
+        if not self.initted:
+            self.init_card()
         self.started = True
         self.card.startReading()
 
