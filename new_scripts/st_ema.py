@@ -23,9 +23,6 @@ record_data = st.sidebar.checkbox("Record Data")
 pv_name = f'{prefix}wavenumber_{laser_id}'
 reader = EMAServerReader(pv_name=pv_name, verbose=True)
 
-# Data storage
-data = np.array([])
-timestamps = []
 
 def update_histogram(batch_data):
     global data, timestamps
