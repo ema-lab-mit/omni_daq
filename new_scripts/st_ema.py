@@ -1,86 +1,150 @@
 import streamlit as st
-import plotly.express as px
-import numpy as np
 import pandas as pd
-from datetime import datetime
+import plotly.express as px
+import threading
 import time
-from threading import Thread
-from served_reader import EMAServerReader
+from tkinter import Tk, filedialog
+from served_reader import EMAServerReader  # Replace with the actual module name
 
-SAVE_FILE_FOLDER = 'C:\\Users\\EMALAB\\Desktop\\TW_DAQ\\DATA\\scans\\'
-prefix = 'LaserLab:'
+# Initialize session state for readers and their data
+if 'readers' not in st.session_state:
+    st.session_state.readers = {}
+    # autoupdate
+if "autoupdate" not in st.session_state:
+    st.session_state.autoupdate = False
+    
+if "update_interval" not in st.session_state:
+    st.session_state.update_interval = 0.5
 
-st.title("LaserLab Distribution")
+# Generate a list of predefined PV names
+pv_names = ["LaserLab:wavenumber_3", "LaserLab:wavenumber_2", "LaserLab:wavenumber_1"]
 
-# Sidebar Inputs
-n_lasers = 4
-laser_id = st.sidebar.selectbox("Laser ID", list(range(1, n_lasers + 1)))
-nbins = st.sidebar.number_input("Number of Bins", min_value=1, value=400)
-wavenumber_bin = st.sidebar.number_input("Wavenumber Bin Size (MHz)", value=0.1)
-record_data = st.sidebar.checkbox("Record Data")
+def start_reader(pv_name, reading_frequency):
+    if pv_name not in st.session_state.readers:
+        try:
+            reader = EMAServerReader(pv_name=pv_name,reading_frequency=reading_frequency, verbose=True)
+            reader.start_reading()
+            st.session_state.readers[pv_name] = reader
+        except Exception as e:
+            st.error(f"Error starting server {pv_name}: {e}")
+    else:
+        st.warning(f"Server {pv_name} already exists!")
 
-# Initialize the EMAServerReader
-pv_name = f'{prefix}wavenumber_{laser_id}'
-reader = EMAServerReader(pv_name=pv_name, verbose=True)
+
+def save_combined_dataframe():
+    Tk().withdraw()  # Close the root window
+    folder_path = filedialog.askdirectory()
+    if folder_path:
+        combined_df = pd.concat([reader.get_data_frame() for reader in st.session_state.readers.values()], ignore_index=True)
+        combined_df.to_csv(f"{folder_path}/combined_data.csv", index=False)
+        st.success(f"Combined data saved to {folder_path}/combined_data.csv")
+        
+def _sidebar(sidebar):
+    global pv_names
+    sidebar.title("Control Panel")
+    with sidebar.expander("General settings"):
+        st.session_state.autoupdate = st.checkbox("Auto Update", value=False)
+        if st.session_state.autoupdate:
+            st.session_state.update_interval = st.number_input(
+                "Update Interval (s)", min_value=0.1, max_value=10., value=1., key="update_interval"
+            )
+    with sidebar.expander("Start saved server"):
+        with st.form(key="start_saved_server"):
+            pv_name = st.selectbox("Select Server", pv_names)
+            reading_frequency = st.number_input("Reading Frequency (Hz)", min_value=0.1, max_value=10., value=1.)
+            if st.form_submit_button("Start Server"):
+                start_reader(pv_name, reading_frequency)
+        sidebar.write("Don't see your server? Add it here.")
+        new_pv_name = sidebar.text_input("Enter new server name")
+        pv_names.append(new_pv_name)
+        
 
 
-def update_histogram(batch_data):
-    global data, timestamps
-    new_data = [entry['value'] for entry in batch_data]
-    new_timestamps = [datetime.fromtimestamp(entry['time']) for entry in batch_data]
+    with st.sidebar.expander("Remove Server"):
+        remove_server = st.selectbox("Select Server to Remove", list(st.session_state.readers.keys()))
+        if st.button("Remove Server") and remove_server in st.session_state.readers:
+            st.session_state.readers.pop(remove_server)
+            st.sidebar.success(f"Server {remove_server} removed!")
+                
+    # Show all logged
+    with st.sidebar.expander("Show All Servers"):
+        for pv_name in st.session_state.readers:
+            st.write(pv_name)
+    # Button to save combined data frame
+    st.sidebar.button("Save Combined Data", on_click=save_combined_dataframe)
 
-    data = np.append(data, new_data)
-    timestamps.extend(new_timestamps)
+    # Button to clear all servers
+    if st.sidebar.button("Clear All Servers"):
+        st.session_state.readers = {}
+        st.sidebar.success("All servers cleared!")
+        
+def plot_time_series(data, title):
+    fig = px.line(data, x='time', y='value', title=title)
+    st.plotly_chart(fig)
 
-    hist, bins = np.histogram(data, bins=nbins)
-    return hist, bins
+def plot_histogram(data, bins, title):
+    fig = px.histogram(data, x='value', nbins=bins, title=title)
+    st.plotly_chart(fig)
 
-# Function to update the time series plot
-def update_timeseries():
-    if len(timestamps) > 0:
-        df = pd.DataFrame({'Timestamp': timestamps, 'Wavenumber': data})
-        fig = px.line(df, x='Timestamp', y='Wavenumber', title="Wavenumber Time Series")
-        st.plotly_chart(fig, use_container_width=True)
+def plot_x_vs_y(x_data, y_data, x_name, y_name, title):
+    fig = px.scatter(x=x_data['value'], y=y_data['value'], labels={'x': x_name, 'y': y_name}, title=title)
+    st.plotly_chart(fig)
+    
+def generate_plot(display_option):
+    if display_option == "Time Series":
+        with st.expander("Time Series Options"):
+            reader = st.selectbox("Select Server", list(st.session_state.readers.keys()))
+            data = st.session_state.readers[reader].get_data_frame()
+            print(data)
+            title = f"{reader} Time Series"
+        plot_time_series(data, title)
+    elif display_option == "Histogram": 
+        with st.expander("Histogram Options"):
+            reader = st.selectbox("Select Server", list(st.session_state.readers.keys()))
+            data = st.session_state.readers[reader].get_batch(1000)
+            title = f"{reader} Histogram"
+            num_bins = st.number_input("Number of Bins", min_value=1, max_value=100, value=50)
+            num_samples = st.number_input("Number of Samples", min_value=1, max_value=1000, value=100)
+            data = reader.get_batch(num_samples)
+        plot_histogram(data, num_bins, title)
+    elif display_option == "X vs Y":
+        with st.expander("X vs Y Options"):
+            x_reader = st.selectbox("Select X Server", list(st.session_state.readers.keys()))
+            y_reader = st.selectbox("Select Y Server", list(st.session_state.readers.keys()))
+            x_data = st.session_state.readers[x_reader].get_data_frame()
+            y_data = st.session_state.readers[y_reader].get_data_frame()
+            title = f"{x_reader} vs {y_reader}"
+        plot_x_vs_y(x_data, y_data, x_reader, y_reader, title)
 
-# Function to update the display
-def update_display():
-    batch_data = reader.get_batch()
-    if batch_data:
-        hist, bins = update_histogram(batch_data)
-        if hist is not None and bins is not None:
-            fig = px.histogram(x=bins[:-1], y=hist, nbins=nbins, title="Wavenumber Histogram")
-            st.plotly_chart(fig, use_container_width=True)
-            update_timeseries()
 
-        # Save data if recording is enabled
-        if record_data:
-            file_tsamp = "{:%Y_%m_%d_%H_%M_%S}".format(datetime.now())
-            file_name = SAVE_FILE_FOLDER + file_tsamp + '.csv'
-            df = pd.DataFrame({'Timestamp': timestamps, 'Wavenumber': data})
-            df.to_csv(file_name, index=False)
-            st.sidebar.write(f"Data recorded to {file_name}")
-
-# Add button to update histogram
-if st.button("Update Histogram"):
-    update_display()
-
-# Display current wavenumber
-wavenumber = reader.get_read_value()
-st.sidebar.write(f"Current Wavenumber: {wavenumber}")
-
-# Streamlit main loop
+def principal_element(placeholder):
+    display_option = st.selectbox("Display Option", ["Time Series", "Histogram", "X vs Y"])
+    with placeholder:
+        if st.session_state.autoupdate:
+            while True:
+                generate_plot(display_option)
+                time.sleep(st.session_state.update_interval)                 
+                # Generate a stop button
+                if st.button("Stop"):
+                    break
+        else:
+            st.button("Generate Plot", on_click=generate_plot(display_option))
+                    
+                
+                   
 def main():
-    st.write("LaserLab Acquisition and Analysis")
+    st.set_page_config(page_title="Laser Lab Data Display", layout="wide")
+    # Sidebar ############################################################
+    sidebar = st.sidebar
+    _sidebar(sidebar)
+    # Main ##############################################################
+    st.title("Combined Server EMA Display")
+    if not st.session_state.readers:
+        st.warning("No servers added yet. Use the control panel to add a server.")
+    else:
+        placeholder = st.empty()
+        principal_element(placeholder)
+    
 
-    # Automatically update the histogram and time series at a specified interval
-    def auto_update():
-        while True:
-            update_display()
-            time.sleep(1)  # Update interval in seconds
-
-    # Start a background thread to update the histogram and time series automatically
-    update_thread = Thread(target=auto_update)
-    update_thread.daemon = True
-    update_thread.start()
 
 main()

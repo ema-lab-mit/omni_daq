@@ -1,23 +1,22 @@
 import time
 import numpy as np
 from CaChannel.util import caget
-import matplotlib.pyplot as plt
 import pandas as pd
 import ntplib
 from time import ctime
 from typing import List, Dict, Any, Optional
-from pydantic import BaseModel
-from datetime import datetime, timedelta
 import threading
+# For awaiting the data
+import asyncio
 
 class EMAServerReader:
     def __init__(self, pv_name: str, saving_dir: str = None, reading_frequency: float = 0.01,
-                 saving_interval: float = 60, ntp_sync_interval: float = 3600, verbose: bool = False):
+                 write_each: float = 100, ntp_sync_interval: float = 60, verbose: bool = False):
         self.name = pv_name
         self.saving_dir = saving_dir
         self.ntp_client = ntplib.NTPClient()
         self.dataframe = pd.DataFrame(columns=['time', 'value'])
-        self.saving_interval = saving_interval
+        self.write_each = write_each
         self.reading_frequency = reading_frequency
         self.ntp_sync_interval = ntp_sync_interval
         self.date_format = '%a %b %d %H:%M:%S %Y'
@@ -29,16 +28,21 @@ class EMAServerReader:
         self.latest_data = None
 
     def sync_time_with_ntp(self):
-        try:
-            response = self.ntp_client.request('pool.ntp.org')
-            ntp_time = response.tx_time
-            self.offset = ntp_time - time.time()
-            self.last_ntp_sync_time = time.time()
-            if self.verbose:
-                print(f"Time synchronized with NTP. Offset: {self.offset} seconds")
-        except Exception as e:
-            if self.verbose:
-                print(f"Error syncing time with NTP: {e}")
+        async def sync_time():
+            try:
+                response = await asyncio.get_event_loop().run_in_executor(None, self.ntp_client.request, 'pool.ntp.org')
+                ntp_time = response.tx_time
+                self.offset = ntp_time - time.time()
+                self.last_ntp_sync_time = time.time()
+                if self.verbose:
+                    print(f"Time synchronized with NTP. Offset: {self.offset} seconds")
+            except Exception as e:
+                if self.verbose:
+                    print(f"Error syncing time with NTP: {e}")
+        
+        asyncio.run(sync_time())
+                
+        
 
     def get_time(self):
         if time.time() - self.last_ntp_sync_time > self.ntp_sync_interval:
@@ -54,44 +58,46 @@ class EMAServerReader:
             return None
 
     def get_batch(self, n_samples=100) -> List[Dict[str, Any]]:
-        batch_data = []
-        for _ in range(n_samples):
-            current_time = self.get_time()
-            scalar = self.get_read_value()
-            if current_time is not None and scalar is not None:
-                batch_data.append({'time': current_time, 'value': scalar})
-            time.sleep(self.reading_frequency)
-        return batch_data
+        return self.dataframe.iloc[-min(n_samples, len(self.dataframe)):]
+    
+    
+    def get_single_value(self) -> Dict[str, Any]:
+        current_time = self.get_time()
+        scalar = self.get_read_value()
+        return {'time': [current_time], 'value': [scalar]}
 
     def start_reading(self):
+        print(f"Starting reading for {self.name}")
         if self.is_reading:
             if self.verbose:
                 print("Reading is already in progress.")
             return
         self.is_reading = True
-        self.reading_thread = threading.Thread(target=self._reading_loop)
+        self.reading_thread = threading.Thread(target=self._reading_loop, daemon=True)
         self.reading_thread.start()
 
     def _reading_loop(self):
         t0 = self.get_time()
         while self.is_reading:
-            payload = self.get_batch()
-            if not payload:
-                if self.verbose:
-                    print("Failed to get payload. Continuing.")
-                time.sleep(self.reading_frequency)
-                continue
+            try:
+                payload = self.get_single_value()
+                if not payload:
+                    if self.verbose:
+                        print("Failed to get payload. Continuing.")
+                    time.sleep(self.reading_frequency)
+                    continue
+                current_time = payload['time']
+                # if self.verbose:
+                #     print(payload)
 
-            current_time = payload[-1]['time']
-            if self.verbose:
-                print(payload)
-                
-            self.update_df(payload)
-            self.latest_data = payload[-1]
-            if self.saving_dir is not None and (current_time - t0) >= self.saving_interval:
-                self.save_df()
-                t0 = current_time  # Reset the saving time interval
-            time.sleep(self.reading_frequency)
+                self.update_df(payload)
+                if self.saving_dir is not None and (current_time - t0) >= self.saving_interval:
+                    self.save_df()
+                    t0 = current_time  # Reset the saving time interval
+                time.sleep(self.reading_frequency)
+            except Exception as e:
+                if self.verbose:
+                    print(f"Exception in reading loop: {e}")
 
     def stop_reading(self):
         self.is_reading = False
@@ -113,43 +119,3 @@ class EMAServerReader:
 
     def get_data_frame(self) -> pd.DataFrame:
         return self.dataframe
-
-# EXAMPLE:
-def example_usage():
-    reader = EMAServerReader(pv_name='LaserLab:wavenumber_3',
-                             saving_interval=60,
-                             reading_frequency=0.1,
-                             saving_dir='C:\\Users\\EMALAB\\Desktop\\TW_DAQ\\DATA\\scans\\foo.csv',
-                             verbose=True)
-    reader.start_reading()
-    
-    import time
-    from tkinter import Tk, Label, Button
-    
-    class DataDisplay:
-        def __init__(self, master, reader):
-            self.master = master
-            self.reader = reader
-            master.title("EMA Server Data Display")
-
-            self.label = Label(master, text="Waiting for data...")
-            self.label.pack()
-
-            self.refresh_button = Button(master, text="Refresh", command=self.refresh_data)
-            self.refresh_button.pack()
-
-        def refresh_data(self):
-            latest_data = self.reader.get_latest_data()
-            if latest_data:
-                self.label.config(text=f"Latest data: {latest_data}")
-            else:
-                self.label.config(text="No data available")
-
-    root = Tk()
-    display = DataDisplay(root, reader)
-    
-    root.protocol("WM_DELETE_WINDOW", lambda: (reader.stop_reading(), root.destroy()))
-    root.mainloop()
-
-if __name__ == '__main__':
-    example_usage()
