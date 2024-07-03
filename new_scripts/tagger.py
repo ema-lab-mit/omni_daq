@@ -3,13 +3,14 @@ import os
 import sys
 # Setup paths
 this_path = os.path.abspath(__file__)
-father_path = os.path.abspath(os.path.join(this_path, "../../"))
-print(father_path)
+# father_path = os.path.abspath(os.path.join(this_path, "../../"))
+father_path = "C:\\Users\\EMALAB\\Desktop\\TW_DAQ"
+# print(father_path)
 sys.path.append(father_path)
 # %%
 ################################
 # Local imports
-from timetagger4 import TimeTagger as tg
+from TimeTaggerDriver_isolde.timetagger4 import TimeTagger as tg
 
 import time
 import numpy as np
@@ -90,6 +91,7 @@ class Tagger():
                 
     def start_reading(self):
         if not self.initted:
+            print("Card is already started")
             self.init_card()
         print("Card initialized in progress")
         self.started = True
@@ -142,4 +144,16 @@ class Tagger():
             self.card = None   
             
 if __name__ == '__main__':
-    tag = Tagger()
+    tagger = Tagger()
+    for i in range(1,4):
+        tagger.enable_channel(i)
+        tagger.set_channel_level(i,-2.25)
+        tagger.set_channel_falling(i)
+        tagger.set_channel_window(i,stop = 2*1000*1000)
+        print(tagger, i)
+    tagger.set_trigger_level(-0.5)
+    tagger.set_trigger_falling()
+    tagger.set_trigger_level(0.5)
+    tagger.set_trigger_rising()
+    tagger.start_reading()
+    print("done")

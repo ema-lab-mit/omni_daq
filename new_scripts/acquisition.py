@@ -232,7 +232,7 @@ class Acquisition(QtWidgets.QMainWindow):
         if self.data is not None and len(self.data)>1:
             try:
                 # not this # self.freqPlot.plot(self.freqs,self.rates, clear=True, pen='r')
-                # self.freqPlot.plot(self.spectrum_x_vals,self.spectrum_y_vals, clear=True, pen='r')
+                # =self.freqPlot.plot(self.spectrum_x_vals,self.spectrum_y_vals, clear=True, pen='r')
                 pass
             except Exception as e:
                 print(e)

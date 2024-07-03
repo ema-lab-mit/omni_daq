@@ -177,13 +177,15 @@ class Acquisition(QtWidgets.QMainWindow):
         self.tagger.start_reading()
 
     def read_wavenumber(self):
-        self.wavenumber = caget('LaserLab:wavenumber_3')
+        self.wavenumber = caget('LaserLab:wavenumber_1')
         # print(self.wavenumber)
 
 
     def read_tagger(self):
         while self.running:
             data = self.tagger.get_data()
+            print("********************************")
+            print(data)
             if data is not None:
                 print("Data is not None")
                 if not data == 0:
@@ -195,7 +197,6 @@ class Acquisition(QtWidgets.QMainWindow):
                     t = [time.time()]*len(data)
                     wn = [self.wavenumber]*len(data)
                     data = np.column_stack([t,wn,data])
-
                     self.list_data.append(data)
                     try:
                         if self.recordBox.isChecked():
